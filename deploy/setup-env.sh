@@ -46,8 +46,13 @@ echo "Витрина и бот заработают, а оплата начнё�
 ask YOOKASSA_SHOP_ID "6/7 shopId ЮKassa"
 ask YOOKASSA_SECRET_KEY "7/7 Секретный ключ ЮKassa"
 
-WEBHOOK_SECRET="$(openssl rand -hex 24)"
-POSTGRES_PASSWORD="$(openssl rand -hex 16)"
+# При перезаписи оставляем прежние пароль базы и секрет вебхука: база уже создана
+# с этим паролем, и новый пароль сломал бы подключение к ней.
+old_value() { [ -f .env ] && grep -E "^$1=" .env | head -n1 | cut -d= -f2- || true; }
+WEBHOOK_SECRET="$(old_value WEBHOOK_SECRET)"
+WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 24)}"
+POSTGRES_PASSWORD="$(old_value POSTGRES_PASSWORD)"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(openssl rand -hex 16)}"
 
 umask 077
 cat > .env <<EOF
