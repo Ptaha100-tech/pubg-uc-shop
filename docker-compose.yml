@@ -23,25 +23,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    expose:
-      - "8000"
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
+    # Только внутренний адрес сервера: наружу приложение выставляет nginx (HTTPS, домен).
+    # Так порты 80/443 остаются у вашего nginx и другие сайты на сервере не страдают.
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
+      - "127.0.0.1:8000:8000"
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:

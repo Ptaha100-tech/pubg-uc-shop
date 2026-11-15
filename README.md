@@ -23,7 +23,7 @@ Telegram ─▶ Mini App (web/)  ──▶ FastAPI (app/) ──▶ PostgreSQL
 
 ## Запуск на сервере
 
-Нужны VPS с Docker и домен, направленный A-записью на IP сервера (порты 80 и 443 открыты).
+Нужны VPS с Docker и домен, направленный A-записью на IP сервера. HTTPS и домен обеспечивает nginx (см. раздел «HTTPS через nginx» ниже), так что бот спокойно живёт на одном сервере с другими сайтами.
 
 1. **Бот.** В [@BotFather](https://t.me/BotFather) создайте бота (`/newbot`), сохраните токен и username.
 2. **ЮKassa.** В личном кабинете возьмите `shopId` и секретный ключ (Интеграция → Ключи API).
@@ -39,7 +39,7 @@ Telegram ─▶ Mini App (web/)  ──▶ FastAPI (app/) ──▶ PostgreSQL
    docker compose up -d --build
    docker compose logs -f app     # должно появиться "started, webhook=..."
    ```
-   Caddy сам получит HTTPS-сертификат. Вебхук бота и кнопка меню регистрируются автоматически.
+   Приложение слушает только `127.0.0.1:8000`, наружу его открывает nginx. Вебхук бота и кнопка меню регистрируются автоматически при старте.
 5. **Цены.** Напишите боту `/admin`. Пакеты 60 / 325 / 660 / 1800 / 3850 / 8100 UC создаются **выключенными с нулевой ценой**, чтобы случайно ничего не продать:
    ```
    /price 325 299      цена продажи, ₽
@@ -47,6 +47,24 @@ Telegram ─▶ Mini App (web/)  ──▶ FastAPI (app/) ──▶ PostgreSQL
    /toggle 325         включить пакет в магазине
    ```
 6. **Тестовый заказ** на 1 пакет с вашей картой, затем возврат кнопкой. Так вы проверите весь цикл.
+
+## HTTPS через nginx
+
+Порты 80 и 443 остаются у вашего nginx, на других сайтах сервера ничего не меняется: магазину добавляется отдельный конфиг.
+
+```bash
+# 1. Конфиг для домена магазина (замените shop.example.com на свой домен)
+sed 's/SHOP_DOMAIN/shop.example.com/' deploy/nginx-shop.conf | sudo tee /etc/nginx/sites-available/pubg-uc-shop
+sudo ln -s /etc/nginx/sites-available/pubg-uc-shop /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx    # reload только если проверка прошла
+
+# 2. HTTPS-сертификат (бесплатный, Let's Encrypt)
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d shop.example.com
+```
+
+Домен должен уже указывать на IP сервера, иначе certbot не выдаст сертификат. На сервере с 2 ГБ памяти перед первой сборкой Docker стоит добавить swap:
+`sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`.
 
 ## Деплой через GitHub
 
