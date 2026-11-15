@@ -47,21 +47,32 @@ def order_out(o: Order) -> dict:
     }
 
 
+def product_out(p) -> dict:
+    has_old = p.old_price > p.price
+    return {
+        "id": p.id,
+        "uc": p.uc,
+        "title": p.title,
+        "price": p.price,
+        "price_text": fmt_rub(p.price),
+        "old_price": p.old_price if has_old else 0,
+        "old_price_text": fmt_rub(p.old_price) if has_old else None,
+    }
+
+
 @router.get("/api/config")
 async def get_config() -> dict:
     return {
         "receipt_required": settings.receipt_enabled,
         "support": settings.support_username,
         "eta": settings.delivery_eta_text,
+        "shop_name": settings.shop_name,
     }
 
 
 @router.get("/api/products")
 async def get_products(_: dict = Depends(current_user)) -> list[dict]:
-    return [
-        {"id": p.id, "uc": p.uc, "title": p.title, "price": p.price, "price_text": fmt_rub(p.price)}
-        for p in await catalog.list_active()
-    ]
+    return [product_out(p) for p in await catalog.list_active()]
 
 
 @router.post("/api/orders")

@@ -83,6 +83,7 @@ def test_money():
     assert parse_rub("299,5") == 29950
     assert parse_rub("1 ₽".replace(" ", "")) == 100
     assert fmt_rub(29900) == "299 ₽" and fmt_rub(29950) == "299,50 ₽"
+    assert fmt_rub(149900) == "1\u00a0499 ₽" and fmt_rub(0) == "0 ₽"
     assert kopecks_to_str(29905) == "299.05" and kopecks_to_str(100) == "1.00"
     assert str_to_kopecks("299.00") == 29900
     with pytest.raises(ValueError):

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     admin_ids: str = ""  # Telegram ID админов через запятую
     admin_chat_id: int | None = None  # чат/группа для заказов; иначе пишем каждому админу
     support_username: str = ""  # без @, показывается в Mini App
+    shop_name: str = "Ne Vechen Shop"  # название в шапке Mini App и в приветствии бота
 
     # База
     database_url: str = "sqlite+aiosqlite:///./shop.db"

@@ -30,7 +30,8 @@ def parse_rub(text: str) -> int:
 
 def fmt_rub(kopecks: int) -> str:
     rub, kop = divmod(int(kopecks), 100)
-    return f"{rub} ₽" if kop == 0 else f"{rub},{kop:02d} ₽"
+    rub_s = f"{rub:,}".replace(",", "\u00a0")
+    return f"{rub_s} ₽" if kop == 0 else f"{rub_s},{kop:02d} ₽"
 
 
 def kopecks_to_str(kopecks: int) -> str:

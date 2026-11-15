@@ -33,9 +33,19 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 dp.include_router(admin_router)
 dp.include_router(user_router)
 
+BOT_DESCRIPTION = (
+    "🪙 Магазин UC для PUBG Mobile\n\n"
+    "⚡️ Быстрое пополнение по Player ID\n"
+    "💳 Оплата через ЮKassa\n"
+    "🛡 Пароль от аккаунта не нужен\n\n"
+    "Нажмите «Начать», чтобы открыть магазин."
+)
+BOT_SHORT_DESCRIPTION = "UC для PUBG Mobile по ID: быстро, без пароля от аккаунта."
+
 USER_COMMANDS = [
     BotCommand(command="start", description="Открыть магазин"),
     BotCommand(command="orders", description="Мои заказы"),
+    BotCommand(command="help", description="Как найти Player ID"),
     BotCommand(command="support", description="Поддержка"),
 ]
 ADMIN_COMMANDS = USER_COMMANDS + [
@@ -60,6 +70,11 @@ async def lifespan(_: FastAPI):
         menu_button=MenuButtonWebApp(text="Купить UC", web_app=WebAppInfo(url=f"{settings.base_url}/app/"))
     )
     await bot.set_my_commands(USER_COMMANDS)
+    try:
+        await bot.set_my_description(description=BOT_DESCRIPTION)
+        await bot.set_my_short_description(short_description=BOT_SHORT_DESCRIPTION)
+    except Exception:
+        log.warning("cannot set bot description", exc_info=True)
     for admin_id in settings.admin_id_list:
         try:
             await bot.set_my_commands(ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=admin_id))

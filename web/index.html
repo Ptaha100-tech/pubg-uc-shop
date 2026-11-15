@@ -3,13 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#09090e">
   <title>Магазин UC</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
+  <!-- Общие градиенты для иконок и монет -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="g-gold" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff1b8"/>
+        <stop offset=".4" stop-color="#ffc23d"/>
+        <stop offset=".78" stop-color="#f08a00"/>
+        <stop offset="1" stop-color="#b45f00"/>
+      </linearGradient>
+      <linearGradient id="g-rim" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffd978"/>
+        <stop offset="1" stop-color="#9c5200"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
   <div id="app"></div>
-  <script src="app.js?v=1"></script>
+  <nav id="nav" hidden></nav>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

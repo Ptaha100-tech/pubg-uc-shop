@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from . import notify
+from . import keyboards, notify
 from .config import get_settings
 from .db import SessionLocal
 from .models import Order, Product, Status, User, utcnow
@@ -215,8 +215,10 @@ async def _after_paid(order_id: str) -> None:
 
     await notify.send(
         order.user_id,
-        f"💳 Оплата получена. Заказ <b>#{order.short}</b>: {order.uc} UC.\n"
-        f"Начисляем на Player ID <code>{order.player_id}</code> — {settings.delivery_eta_text}.",
+        f"💳 <b>Оплата получена</b>\n\n"
+        f"📦 Заказ <b>#{order.short}</b> · 🪙 {order.uc} UC\n"
+        f"🆔 Player ID: <code>{order.player_id}</code>\n\n"
+        f"⏳ Начисляем UC — {settings.delivery_eta_text}. Как только всё будет готово, напишу.",
     )
     try:
         result = await supplier.deliver(order, user)
@@ -246,8 +248,12 @@ async def mark_delivered(order_id: str) -> bool:
         order = await s.get(Order, order_id)
     await notify.send(
         order.user_id,
-        f"✅ Заказ <b>#{order.short}</b> выполнен: {order.uc} UC начислены на ID <code>{order.player_id}</code>.\n"
-        "Приятной игры! Если что-то не так — напишите в поддержку.",
+        f"✅ <b>UC начислены!</b>\n\n"
+        f"📦 Заказ <b>#{order.short}</b> · 🪙 {order.uc} UC\n"
+        f"🆔 Player ID: <code>{order.player_id}</code>\n\n"
+        "🎮 Заходите в игру. Приятной игры!\n"
+        "Если что-то не так — напишите в поддержку (/support).",
+        keyboards.shop_kb("🛒 Купить ещё"),
     )
     return True
 

@@ -77,3 +77,14 @@ async def add_pack(uc: int, price: int, cost: int) -> bool:
         s.add(Product(uc=uc, title=f"{uc} UC", price=price, cost=cost, active=price > 0, sort=last + 1))
         await s.commit()
         return True
+
+
+async def set_old_price(uc: int, kopecks: int) -> bool:
+    """Зачёркнутая цена в витрине. 0 убирает её."""
+    async with SessionLocal() as s:
+        p = await s.scalar(select(Product).where(Product.uc == uc))
+        if p is None:
+            return False
+        p.old_price = kopecks
+        await s.commit()
+        return True

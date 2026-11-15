@@ -38,6 +38,7 @@ class Product(Base):
     title: Mapped[str] = mapped_column(String(64))
     price: Mapped[int] = mapped_column(Integer)  # копейки
     cost: Mapped[int] = mapped_column(Integer, default=0)  # закупка, копейки
+    old_price: Mapped[int] = mapped_column(Integer, default=0)  # зачёркнутая цена, копейки (0 = не показывать)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort: Mapped[int] = mapped_column(Integer, default=0)
 

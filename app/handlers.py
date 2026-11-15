@@ -1,17 +1,18 @@
 import logging
 from html import escape
+from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command, CommandObject, CommandStart
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    WebAppInfo,
 )
 
-from . import catalog, notify, orders
+from . import catalog, keyboards, notify, orders
 from .config import get_settings
 from .models import Status
 from .orders import STATUS_TEXT
@@ -19,6 +20,12 @@ from .utils import fmt_rub, parse_rub
 
 log = logging.getLogger("handlers")
 settings = get_settings()
+
+IMG_DIR = Path(__file__).resolve().parent.parent / "web" / "img"
+HERO_VIDEO = IMG_DIR / "hero.mp4"
+BANNER = IMG_DIR / "banner.jpg"
+# После первой отправки Telegram хранит файл у себя, дальше шлём по file_id (быстро, без нагрузки на сервер)
+_media_ids: dict[str, str] = {}
 
 router = Router(name="user")
 admin = Router(name="admin")
@@ -34,14 +41,6 @@ admin.message.filter(IsAdmin())
 admin.callback_query.filter(IsAdmin())
 
 
-def shop_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🛒 Купить UC", web_app=WebAppInfo(url=f"{settings.base_url}/app/"))]
-        ]
-    )
-
-
 def tg_dict(m: Message) -> dict:
     u = m.from_user
     return {"id": u.id, "username": u.username, "first_name": u.first_name}
@@ -49,10 +48,79 @@ def tg_dict(m: Message) -> dict:
 
 def order_card(o) -> str:
     return (
-        f"<b>Заказ #{o.short}</b>\n"
-        f"{o.uc} UC · {fmt_rub(o.price)}\n"
-        f"Player ID: <code>{escape(o.player_id)}</code>\n"
-        f"Статус: {STATUS_TEXT.get(o.status, o.status)}"
+        f"📦 <b>Заказ #{o.short}</b>\n"
+        f"🪙 {o.uc} UC · {fmt_rub(o.price)}\n"
+        f"🆔 <code>{escape(o.player_id)}</code>\n"
+        f"{STATUS_TEXT.get(o.status, o.status)}"
+    )
+
+
+def welcome_text() -> str:
+    return (
+        f"🪙 <b>{escape(settings.shop_name)}</b>\n"
+        "Пополнение <b>UC для PUBG Mobile</b> по ID\n\n"
+        "1️⃣ Выберите пакет UC\n"
+        "2️⃣ Введите Player ID\n"
+        "3️⃣ Оплатите заказ\n"
+        f"4️⃣ UC придут на аккаунт — {escape(settings.delivery_eta_text)}\n\n"
+        "🛡 Пароль от аккаунта нам <b>не нужен</b> — только ID игрока."
+    )
+
+
+HOWID_TEXT = (
+    "🆔 <b>Где найти Player ID</b>\n\n"
+    "1. Откройте PUBG Mobile\n"
+    "2. Нажмите на свой аватар в левом верхнем углу\n"
+    "3. Под ником указан <b>ID персонажа</b> — 8–12 цифр\n"
+    "4. Скопируйте его и вставьте при оформлении заказа\n\n"
+    "⚠️ После начисления вернуть UC нельзя, поэтому проверяйте ID перед оплатой."
+)
+
+
+def support_text() -> str:
+    contact = f"@{settings.support_username}" if settings.support_username else "администратору магазина"
+    return (
+        "💬 <b>Поддержка</b>\n\n"
+        f"По вопросам оплаты и начисления UC пишите {contact}.\n"
+        "Укажите номер заказа — он виден в разделе «Мои заказы».\n\n"
+        "↩️ Если заказ оплачен, но UC ещё не начислены, мы вернём деньги по вашему запросу."
+    )
+
+
+async def send_welcome(m: Message) -> None:
+    caption, kb = welcome_text(), keyboards.main_kb()
+    if HERO_VIDEO.exists():
+        try:
+            sent = await m.answer_animation(
+                _media_ids.get("video") or FSInputFile(HERO_VIDEO), caption=caption, reply_markup=kb
+            )
+            media = sent.animation or sent.video
+            if media:
+                _media_ids["video"] = media.file_id
+            return
+        except Exception:  # не получилось с видео — пробуем картинку
+            _media_ids.pop("video", None)
+            log.warning("cannot send welcome video", exc_info=True)
+    if BANNER.exists():
+        try:
+            sent = await m.answer_photo(_media_ids.get("photo") or FSInputFile(BANNER), caption=caption, reply_markup=kb)
+            if sent.photo:
+                _media_ids["photo"] = sent.photo[-1].file_id
+            return
+        except Exception:  # и с картинкой не вышло — обычный текст
+            _media_ids.pop("photo", None)
+            log.warning("cannot send welcome photo", exc_info=True)
+    await m.answer(caption, reply_markup=kb)
+
+
+async def send_orders(m: Message, user_id: int) -> None:
+    rows = await orders.user_orders(user_id, limit=10)
+    if not rows:
+        await m.answer("📦 Заказов пока нет.\nВыберите пакет UC в магазине 👇", reply_markup=keyboards.shop_kb())
+        return
+    await m.answer(
+        "📦 <b>Мои заказы</b>\n\n" + "\n\n".join(order_card(o) for o in rows),
+        reply_markup=keyboards.shop_kb(),
     )
 
 
@@ -65,33 +133,45 @@ async def cmd_start(m: Message, command: CommandObject) -> None:
     if command.args and command.args.startswith("o_"):
         order = await orders.get_user_order(m.from_user.id, command.args[2:])
         if order:
-            await m.answer(order_card(order), reply_markup=shop_kb())
+            await m.answer(order_card(order), reply_markup=keyboards.main_kb())
             return
-    await m.answer(
-        "👋 <b>Магазин UC для PUBG Mobile</b>\n\n"
-        "Выберите пакет, укажите Player ID и оплатите картой или через СБП — "
-        f"UC придут на аккаунт, {settings.delivery_eta_text}.\n\n"
-        "Нужна помощь — /support",
-        reply_markup=shop_kb(),
-    )
+    await send_welcome(m)
 
 
 @router.message(Command("orders"))
 async def cmd_orders(m: Message) -> None:
-    rows = await orders.user_orders(m.from_user.id, limit=10)
-    if not rows:
-        await m.answer("Заказов пока нет.", reply_markup=shop_kb())
-        return
-    await m.answer("\n\n".join(order_card(o) for o in rows), reply_markup=shop_kb())
+    await send_orders(m, m.from_user.id)
 
 
-@router.message(Command("support", "paysupport", "help"))
+@router.message(Command("help"))
+async def cmd_help(m: Message) -> None:
+    await m.answer(HOWID_TEXT, reply_markup=keyboards.back_kb())
+
+
+@router.message(Command("support", "paysupport"))
 async def cmd_support(m: Message) -> None:
-    contact = f"@{settings.support_username}" if settings.support_username else "администратору магазина"
-    await m.answer(
-        f"По любым вопросам об оплате и выдаче UC пишите {contact}. "
-        "Укажите номер заказа (виден в /orders)."
-    )
+    await m.answer(support_text(), reply_markup=keyboards.shop_kb())
+
+
+@router.callback_query(F.data == "orders")
+async def cb_orders(c: CallbackQuery) -> None:
+    await c.answer()
+    if isinstance(c.message, Message):
+        await send_orders(c.message, c.from_user.id)
+
+
+@router.callback_query(F.data == "howid")
+async def cb_howid(c: CallbackQuery) -> None:
+    await c.answer()
+    if isinstance(c.message, Message):
+        await c.message.answer(HOWID_TEXT, reply_markup=keyboards.back_kb())
+
+
+@router.callback_query(F.data == "support")
+async def cb_support(c: CallbackQuery) -> None:
+    await c.answer()
+    if isinstance(c.message, Message):
+        await c.message.answer(support_text(), reply_markup=keyboards.shop_kb())
 
 
 # ───────────────────────── админ ─────────────────────────
@@ -104,6 +184,7 @@ ADMIN_HELP = (
     "/products — пакеты и цены\n"
     "/price &lt;UC&gt; &lt;₽&gt; — цена продажи\n"
     "/cost &lt;UC&gt; &lt;₽&gt; — закупочная цена\n"
+    "/oldprice &lt;UC&gt; &lt;₽&gt; — зачёркнутая цена (0 — убрать). Только реально действовавшая!\n"
     "/toggle &lt;UC&gt; — включить/выключить пакет\n"
     "/addpack &lt;UC&gt; &lt;₽&gt; [закупка ₽] — новый пакет\n"
     "/ban &lt;id&gt; · /unban &lt;id&gt; — блокировка покупателя"
@@ -134,7 +215,8 @@ async def adm_products(m: Message) -> None:
     lines = ["<b>Пакеты</b> (UC · цена · закупка · маржа)"]
     for p in rows:
         mark = "🟢" if p.active else "⚪️"
-        lines.append(f"{mark} {p.uc} UC · {fmt_rub(p.price)} · {fmt_rub(p.cost)} · {fmt_rub(p.price - p.cost)}")
+        old = f" · было {fmt_rub(p.old_price)}" if p.old_price > p.price else ""
+        lines.append(f"{mark} {p.uc} UC · {fmt_rub(p.price)} · {fmt_rub(p.cost)} · {fmt_rub(p.price - p.cost)}{old}")
     await m.answer("\n".join(lines))
 
 
@@ -159,6 +241,11 @@ async def adm_price(m: Message, command: CommandObject) -> None:
 @admin.message(Command("cost"))
 async def adm_cost(m: Message, command: CommandObject) -> None:
     await _price_like(m, command, catalog.set_cost, "Закупка")
+
+
+@admin.message(Command("oldprice"))
+async def adm_oldprice(m: Message, command: CommandObject) -> None:
+    await _price_like(m, command, catalog.set_old_price, "Зачёркнутая цена")
 
 
 @admin.message(Command("toggle"))
@@ -271,3 +358,12 @@ async def cb_refund_confirm(c: CallbackQuery) -> None:
         await _finish(c, "↩️ Возврат")
     elif isinstance(c.message, Message):
         await c.message.edit_reply_markup(reply_markup=notify.admin_order_kb(c.data[4:]))
+
+
+# ───────────────────────── всё остальное ─────────────────────────
+# Должен стоять последним: ловит обычный текст, который не является командой.
+
+
+@router.message(F.text & ~F.text.startswith("/"))
+async def fallback(m: Message) -> None:
+    await m.answer("Выберите действие 👇", reply_markup=keyboards.main_kb())
